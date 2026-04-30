@@ -1,5 +1,28 @@
 // Global test setup for bun:test
-import { afterEach, afterAll } from 'bun:test';
+import { afterEach, afterAll, mock } from 'bun:test';
+
+// Mock pino and pino-pretty globally for all tests to avoid missing dependency errors in some environments
+mock.module('pino', () => ({
+  default: mock(() => ({
+    child: mock(() => ({
+      info: mock(),
+      error: mock(),
+      warn: mock(),
+      debug: mock(),
+      trace: mock(),
+      fatal: mock(),
+    })),
+    info: mock(),
+    error: mock(),
+    warn: mock(),
+    debug: mock(),
+    trace: mock(),
+    fatal: mock(),
+  })),
+}));
+mock.module('pino-pretty', () => ({
+  default: mock(),
+}));
 
 // Clean up mocks after each test
 afterEach(() => {

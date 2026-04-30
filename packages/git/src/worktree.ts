@@ -40,8 +40,13 @@ export function getWorktreeBase(repoPath: RepoPath, codebaseName?: string): stri
   }
   // Existing path-prefix detection (cloned repos under workspaces/)
   const workspacesPath = getArchonWorkspacesPath();
-  if (repoPath.startsWith(workspacesPath)) {
-    const relative = repoPath.substring(workspacesPath.length + 1);
+  if (
+    repoPath.startsWith(workspacesPath) &&
+    (repoPath.length === workspacesPath.length ||
+      repoPath[workspacesPath.length] === '/' ||
+      repoPath[workspacesPath.length] === '\\')
+  ) {
+    const relative = repoPath.substring(workspacesPath.length).replace(/^[/\\]/, '');
     const parts = relative.split(/[/\\]/).filter(p => p.length > 0);
     if (parts.length >= 2) {
       return getProjectWorktreesPath(parts[0], parts[1]);
@@ -68,8 +73,15 @@ export function isProjectScopedWorktreeBase(repoPath: RepoPath, codebaseName?: s
     // Invalid format — fall through to path detection (same safe degradation as getWorktreeBase).
   }
   const workspacesPath = getArchonWorkspacesPath();
-  if (!repoPath.startsWith(workspacesPath)) return false;
-  const relative = repoPath.substring(workspacesPath.length + 1);
+  if (
+    !repoPath.startsWith(workspacesPath) ||
+    (repoPath.length > workspacesPath.length &&
+      repoPath[workspacesPath.length] !== '/' &&
+      repoPath[workspacesPath.length] !== '\\')
+  ) {
+    return false;
+  }
+  const relative = repoPath.substring(workspacesPath.length).replace(/^[/\\]/, '');
   const parts = relative.split(/[/\\]/).filter(p => p.length > 0);
   return parts.length >= 2;
 }

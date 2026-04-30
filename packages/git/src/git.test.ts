@@ -286,6 +286,50 @@ describe('git utilities', () => {
       const result = git.getWorktreeBase('/local/repo', 'invalid-no-slash');
       expect(result).toBe(join(homedir(), '.archon', 'worktrees'));
     });
+
+    test('handles invalid codebaseName formats by falling back to path detection', () => {
+      delete process.env.WORKSPACE_PATH;
+      delete process.env.ARCHON_DOCKER;
+      delete process.env.ARCHON_HOME;
+
+      expect(git.getWorktreeBase('/local/repo', 'owner/')).toBe(join(homedir(), '.archon', 'worktrees'));
+      expect(git.getWorktreeBase('/local/repo', '/repo')).toBe(join(homedir(), '.archon', 'worktrees'));
+      expect(git.getWorktreeBase('/local/repo', 'owner//repo')).toBe(
+        join(homedir(), '.archon', 'worktrees')
+      );
+      expect(git.getWorktreeBase('/local/repo', 'owner/repo/extra')).toBe(
+        join(homedir(), '.archon', 'worktrees')
+      );
+    });
+
+    test('ignores prefix-only matches for workspaces path', () => {
+      delete process.env.WORKSPACE_PATH;
+      delete process.env.ARCHON_DOCKER;
+      delete process.env.ARCHON_HOME;
+      const workspacesPath = join(homedir(), '.archon', 'workspaces');
+      const prefixPath = workspacesPath + '-extra/owner/repo';
+      const result = git.getWorktreeBase(prefixPath);
+      expect(result).toBe(join(homedir(), '.archon', 'worktrees'));
+    });
+
+    test('returns legacy global path when repoPath exactly matches workspacesPath', () => {
+      delete process.env.WORKSPACE_PATH;
+      delete process.env.ARCHON_DOCKER;
+      delete process.env.ARCHON_HOME;
+      const workspacesPath = join(homedir(), '.archon', 'workspaces');
+      const result = git.getWorktreeBase(workspacesPath);
+      expect(result).toBe(join(homedir(), '.archon', 'worktrees'));
+    });
+
+    test('returns legacy global path when repoPath has only one segment under workspaces', () => {
+      delete process.env.WORKSPACE_PATH;
+      delete process.env.ARCHON_DOCKER;
+      delete process.env.ARCHON_HOME;
+      const workspacesPath = join(homedir(), '.archon', 'workspaces');
+      const repoPath = join(workspacesPath, 'only-owner');
+      const result = git.getWorktreeBase(repoPath);
+      expect(result).toBe(join(homedir(), '.archon', 'worktrees'));
+    });
   });
 
   describe('isProjectScopedWorktreeBase', () => {
@@ -350,6 +394,55 @@ describe('git utilities', () => {
       delete process.env.ARCHON_DOCKER;
       delete process.env.ARCHON_HOME;
       expect(git.isProjectScopedWorktreeBase('/local/repo', 'invalid')).toBe(false);
+    });
+
+    test('returns false for prefix-only matches of workspaces path', () => {
+      delete process.env.WORKSPACE_PATH;
+      delete process.env.ARCHON_DOCKER;
+      delete process.env.ARCHON_HOME;
+      const workspacesPath = join(homedir(), '.archon', 'workspaces');
+      const prefixPath = workspacesPath + '-extra/owner/repo';
+      expect(git.isProjectScopedWorktreeBase(prefixPath)).toBe(false);
+    });
+
+    test('returns false when repoPath exactly matches workspacesPath', () => {
+      delete process.env.WORKSPACE_PATH;
+      delete process.env.ARCHON_DOCKER;
+      delete process.env.ARCHON_HOME;
+      const workspacesPath = join(homedir(), '.archon', 'workspaces');
+      expect(git.isProjectScopedWorktreeBase(workspacesPath)).toBe(false);
+    });
+  });
+
+  describe('worktreeExists', () => {
+    test('throws for unexpected errors on .git check', async () => {
+      const testPath = join(testDir, 'unexpected-error');
+      await realMkdir(testPath, { recursive: true });
+
+      const fsPromises = await import('fs/promises');
+      const accessSpy = spyOn(fsPromises, 'access');
+      mockLogger.error.mockClear();
+
+      // First call (directory check) succeeds, second call (.git check) fails with EPERM
+      accessSpy.mockResolvedValueOnce(undefined);
+      const epermError = new Error('Operation not permitted') as NodeJS.ErrnoException;
+      epermError.code = 'EPERM';
+      accessSpy.mockRejectedValueOnce(epermError);
+
+      try {
+        await expect(git.worktreeExists(testPath)).rejects.toThrow(
+          `Failed to check worktree at ${testPath}: Operation not permitted`
+        );
+        expect(mockLogger.error).toHaveBeenCalledWith(
+          expect.objectContaining({
+            worktreePath: testPath,
+            code: 'EPERM',
+          }),
+          'worktree.existence_check_failed'
+        );
+      } finally {
+        accessSpy.mockRestore();
+      }
     });
   });
 
