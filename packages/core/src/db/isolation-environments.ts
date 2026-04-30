@@ -45,6 +45,36 @@ export async function findActiveByWorkflow(
 }
 
 /**
+ * Find active isolation environments by multiple workflow identities
+ */
+export async function findActiveByWorkflows(
+  codebaseId: string,
+  workflowType: IsolationWorkflowType,
+  workflowIds: string[]
+): Promise<IsolationEnvironmentRow[]> {
+  if (workflowIds.length === 0) return [];
+
+  const dialect = getDialect();
+  let sql: string;
+  let params: unknown[];
+
+  if (dialect.name === 'sqlite') {
+    // SQLite doesn't support ANY($3), use IN (...) with dynamic placeholders
+    const placeholders = workflowIds.map((_, i) => `$${i + 3}`).join(', ');
+    sql = `SELECT * FROM remote_agent_isolation_environments
+           WHERE codebase_id = $1 AND workflow_type = $2 AND workflow_id IN (${placeholders}) AND status = 'active'`;
+    params = [codebaseId, workflowType, ...workflowIds];
+  } else {
+    sql = `SELECT * FROM remote_agent_isolation_environments
+           WHERE codebase_id = $1 AND workflow_type = $2 AND workflow_id = ANY($3) AND status = 'active'`;
+    params = [codebaseId, workflowType, workflowIds];
+  }
+
+  const result = await pool.query<IsolationEnvironmentRow>(sql, params);
+  return result.rows;
+}
+
+/**
  * Find all active environments for a codebase
  */
 export async function listByCodebase(
@@ -289,6 +319,7 @@ export function createIsolationStore(): IIsolationStore {
   return {
     getById,
     findActiveByWorkflow,
+    findActiveByWorkflows,
     create: (env: CreateEnvironmentParams) => create(env),
     updateStatus,
     countActiveByCodebase,

@@ -400,7 +400,9 @@ export class SqliteAdapter implements IDatabase {
 /**
  * SQLite SQL dialect helpers
  */
-export const sqliteDialect: SqlDialect = {
+export const sqliteDialect: SqlDialect & { name: 'sqlite' } = {
+  name: 'sqlite',
+
   generateUuid(): string {
     return crypto.randomUUID();
   },

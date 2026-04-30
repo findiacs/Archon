@@ -11,6 +11,11 @@ export interface IIsolationStore {
     workflowType: IsolationWorkflowType,
     workflowId: string
   ): Promise<IsolationEnvironmentRow | null>;
+  findActiveByWorkflows(
+    codebaseId: string,
+    workflowType: IsolationWorkflowType,
+    workflowIds: string[]
+  ): Promise<IsolationEnvironmentRow[]>;
   create(env: CreateEnvironmentParams): Promise<IsolationEnvironmentRow>;
   updateStatus(id: string, status: 'active' | 'destroyed'): Promise<void>;
   countActiveByCodebase(codebaseId: string): Promise<number>;

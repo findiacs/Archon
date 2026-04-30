@@ -237,12 +237,19 @@ export class IsolationResolver {
     codebaseId: string,
     linkedIssues: number[]
   ): Promise<IsolationResolution | null> {
+    if (linkedIssues.length === 0) return null;
+
+    const linkedEnvs = await this.store.findActiveByWorkflows(
+      codebaseId,
+      'issue',
+      linkedIssues.map(String)
+    );
+
+    // Create a map for quick lookup and to preserve original linkedIssues order
+    const envMap = new Map(linkedEnvs.map(env => [env.workflow_id, env]));
+
     for (const issueNum of linkedIssues) {
-      const linkedEnv = await this.store.findActiveByWorkflow(
-        codebaseId,
-        'issue',
-        String(issueNum)
-      );
+      const linkedEnv = envMap.get(String(issueNum));
       if (!linkedEnv) continue;
 
       if (await worktreeExists(toWorktreePath(linkedEnv.working_path))) {

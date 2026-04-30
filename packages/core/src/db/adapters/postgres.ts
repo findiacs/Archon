@@ -81,7 +81,9 @@ export class PostgresAdapter implements IDatabase {
 /**
  * PostgreSQL SQL dialect helpers
  */
-export const postgresDialect: SqlDialect = {
+export const postgresDialect: SqlDialect & { name: 'postgres' } = {
+  name: 'postgres',
+
   generateUuid(): string {
     return crypto.randomUUID();
   },

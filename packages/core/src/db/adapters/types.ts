@@ -55,6 +55,11 @@ export interface IDatabase {
  */
 export interface SqlDialect {
   /**
+   * Dialect name
+   */
+  readonly name?: 'postgres' | 'sqlite';
+
+  /**
    * Generate a UUID (called for each INSERT)
    */
   generateUuid(): string;

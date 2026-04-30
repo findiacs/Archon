@@ -1,4 +1,4 @@
-import { mock, describe, test, expect, beforeEach } from 'bun:test';
+import { mock, describe, test, expect, beforeEach, spyOn } from 'bun:test';
 import { createQueryResult, mockPostgresDialect } from '../test/mocks/database';
 import type { IsolationEnvironmentRow } from '@archon/isolation';
 
@@ -84,6 +84,46 @@ describe('isolation-environments', () => {
       const result = await findActiveByWorkflow('codebase-456', 'issue', '99');
 
       expect(result).toBeNull();
+    });
+  });
+
+  describe('findActiveByWorkflows', () => {
+    test('finds active environments by multiple workflow identities (PostgreSQL)', async () => {
+      mockQuery.mockResolvedValueOnce(createQueryResult([sampleEnv]));
+
+      const result = await findActiveByWorkflows('codebase-456', 'issue', ['42', '43']);
+
+      expect(result).toEqual([sampleEnv]);
+      expect(mockQuery).toHaveBeenCalledWith(expect.stringContaining('workflow_id = ANY($3)'), [
+        'codebase-456',
+        'issue',
+        ['42', '43'],
+      ]);
+    });
+
+    test('finds active environments by multiple workflow identities (SQLite)', async () => {
+      const { sqliteDialect } = await import('../db/adapters/sqlite');
+      const connection = await import('./connection');
+      const getDialectSpy = spyOn(connection, 'getDialect').mockReturnValue(sqliteDialect);
+
+      mockQuery.mockResolvedValueOnce(createQueryResult([sampleEnv]));
+
+      const result = await findActiveByWorkflows('codebase-456', 'issue', ['42', '43']);
+
+      expect(result).toEqual([sampleEnv]);
+      expect(mockQuery).toHaveBeenCalledWith(
+        expect.stringContaining('workflow_id IN ($3, $4)'),
+        ['codebase-456', 'issue', '42', '43']
+      );
+
+      getDialectSpy.mockRestore();
+    });
+
+    test('returns empty array when workflowIds is empty', async () => {
+      const result = await findActiveByWorkflows('codebase-456', 'issue', []);
+
+      expect(result).toEqual([]);
+      expect(mockQuery).not.toHaveBeenCalled();
     });
   });
 

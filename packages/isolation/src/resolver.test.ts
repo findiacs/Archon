@@ -40,6 +40,16 @@ function makeMockStore(overrides?: Partial<IIsolationStore>): IIsolationStore {
   return {
     getById: async () => null,
     findActiveByWorkflow: async () => null,
+    findActiveByWorkflows: async (_cid, _wt, ids) => {
+      const results: IsolationEnvironmentRow[] = [];
+      for (const id of ids) {
+        if (overrides?.findActiveByWorkflow) {
+          const row = await overrides.findActiveByWorkflow(_cid, _wt, id);
+          if (row) results.push(row);
+        }
+      }
+      return results;
+    },
     create: async env =>
       makeEnvRow({
         codebase_id: env.codebase_id,
@@ -232,6 +242,45 @@ describe('IsolationResolver', () => {
       expect(result.method.type).toBe('linked_issue_reuse');
       if (result.method.type === 'linked_issue_reuse') {
         expect(result.method.issueNumber).toBe(10);
+      }
+    }
+  });
+
+  test('linked issue reuse (batch) — respects preference order', async () => {
+    const env10 = makeEnvRow({
+      id: 'env-10',
+      workflow_id: '10',
+      working_path: '/worktrees/issue-10',
+    });
+    const env20 = makeEnvRow({
+      id: 'env-20',
+      workflow_id: '20',
+      working_path: '/worktrees/issue-20',
+    });
+
+    let workflowsCalled = 0;
+    const resolver = createResolver({
+      store: makeMockStore({
+        findActiveByWorkflows: async (_cid, _wt, ids) => {
+          workflowsCalled++;
+          return [env20, env10]; // Order returned by DB might be different
+        },
+      }),
+    });
+
+    const result = await resolver.resolve({
+      existingEnvId: null,
+      codebase: defaultCodebase,
+      hints: { workflowType: 'pr', workflowId: '55', linkedIssues: [10, 20] },
+      platformType: 'web',
+    });
+
+    expect(workflowsCalled).toBe(1);
+    expect(result.status).toBe('resolved');
+    if (result.status === 'resolved') {
+      expect(result.method.type).toBe('linked_issue_reuse');
+      if (result.method.type === 'linked_issue_reuse') {
+        expect(result.method.issueNumber).toBe(10); // Should pick 10 because it's first in linkedIssues
       }
     }
   });
